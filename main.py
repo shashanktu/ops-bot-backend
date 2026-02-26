@@ -7,8 +7,11 @@ import os
 import json
 from typing import Dict, Any
 from openai import AzureOpenAI
+from pydantic import BaseModel
+
 
 app = FastAPI()
+
 
 # Configure Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -216,24 +219,62 @@ def update_position(rrf_id: str, vam_id: str):
     return {"message": f"Failed to update position for RRF ID: {rrf_id} and VAM ID: {vam_id}"}
 
 
+
+
+
+# @app.get("/matching")
+# def get_matching_candidates():
+#     try:
+#         bench = get_candidates_db()
+#         rrf = get_rrf_details()
+#         df1=pd.DataFrame(bench)
+#         df2=pd.DataFrame(rrf)
+#         df1_update=df1[['vamid', 'grade', 'designation', 'current_skill', 'primary_skill']]
+#         df2=df2[['rrf_id', 'pos_title', 'role', 'account']]
+        
+#         # Call Gemini API for AI-powered matching
+#         gemini_response = call_gemini_api(df1_update, df2)
+        
+#         return {
+#             "ai_matching": gemini_response
+#         }
+#     except Exception as e:
+#         print(f"Error in matching: {e}")
+#         return {"error": "An error occurred while processing the request"}
+
+
 @app.get("/matching")
 def get_matching_candidates():
     try:
         bench = get_candidates_db()
         rrf = get_rrf_details()
-        df1=pd.DataFrame(bench)
-        df2=pd.DataFrame(rrf)
-        df1=df1[['vamid', 'grade', 'designation', 'current_skill', 'primary_skill']]
-        df2=df2[['rrf_id', 'pos_title', 'role', 'account']]
-        
-        # Call Gemini API for AI-powered matching
-        gemini_response = call_gemini_api(df1, df2)
-        
+
+        df1 = pd.DataFrame(bench)
+        df2 = pd.DataFrame(rrf)
+
+        df1_update = df1[['vamid', 'grade', 'designation', 'current_skill', 'primary_skill']]
+        df2 = df2[['rrf_id', 'pos_title', 'role', 'account']]
+
+        # Call Gemini
+        gemini_response = call_gemini_api(df1_update, df2)
+
+        # Build employee lookup
+        employee_lookup = (
+            df1
+            .set_index("vamid")
+            .to_dict(orient="index")
+        )
+
+        # Enrich response
+        for match in gemini_response["gemini_analysis"]["matches"]:
+            for candidate in match.get("recommended_candidates", []):
+                vamid = candidate.get("vamid")
+                candidate["employee_details"] = employee_lookup.get(vamid)
+
         return {
-            # "bench_data": df1.to_dict('records'),
-            # "rrf_data": df2.to_dict('records'),
             "ai_matching": gemini_response
         }
+
     except Exception as e:
         print(f"Error in matching: {e}")
         return {"error": "An error occurred while processing the request"}
@@ -258,6 +299,8 @@ async def analyze_with_gemini(prompt: str):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error calling Gemini API: {str(e)}")
+
+
 
 # Run the application
 if __name__ == "__main__":
