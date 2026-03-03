@@ -283,7 +283,7 @@ def insert_into_allocation_table(rrf_id: str, vam_id: str):
         # print(rrf_details.get("account"))
         conn = connect_to_retool()
         cursor = conn.cursor()
-        cursor.execute("INSERT INTO allocation_table (vamid,name,grade,designation,email,account,rrf_id,pos_title,role) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s);", (
+        cursor.execute("INSERT INTO allocation_table (vamid,name,grade,designation,email,account,rrf_id,pos_title,role,allocated_date) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s);", (
             associate_details.get("vamid"),
             associate_details.get("name"),
             associate_details.get("grade"),
@@ -292,7 +292,8 @@ def insert_into_allocation_table(rrf_id: str, vam_id: str):
             rrf_details.get("account"),
             rrf_details.get("rrf_id"),
             rrf_details.get("pos_title"),
-            rrf_details.get("role")
+            rrf_details.get("role"),
+            datetime.now()
         ))
         conn.commit()
         cursor.close()
@@ -479,6 +480,38 @@ def clear_rrf_table():
             cursor.close()
             conn.close()
             return False
+        
+
+
+def get_allocated_candidates_db():
+    try:
+        conn = connect_to_retool()
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM allocation_table;")
+        rows = cursor.fetchall()
+        cursor.close()
+        conn.close()
+        rows = [
+            {
+                "vamid": row[1],
+                "name": row[2],
+                "grade": row[3],
+                "designation": row[4],
+                "email": row[5],
+                "account": row[6],
+                "rrf_id": row[7],
+                "pos_title": row[8],
+                "role": row[9],
+                "allocated_date": row[10]
+            }
+            for row in rows]
+        
+
+        return rows
+    except Exception as e:
+        print(f"Error fetching allocated candidates: {e}")
+        return []
+
 
 if __name__ == "__main__":
     # Only run this when the script is executed directly, not when imported

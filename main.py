@@ -11,7 +11,8 @@ from database import (connect_to_retool,
                       insert_into_rrf_table,
                       clear_bench_table,
                       clear_rrf_table,
-                      get_rrf_by_id)
+                      get_rrf_by_id,
+                      get_allocated_candidates_db)
 import pandas as pd
 import google.generativeai as genai
 import os
@@ -42,48 +43,6 @@ app.add_middleware(
     allow_methods=["*"],  # Allows all methods
     allow_headers=["*"],  # Allows all headers
 )
-
-# Create a simple endpoint that returns "Hello World"
-
-
-# def get_azure_response(text):
-#     try:
-#         endpoint = "https://defaultresourcegroup-ccan-resource-0475.cognitiveservices.azure.com/"
-#         deployment = "gpt-4.1-mini-312634"
-#         subscription_key = os.environ.get("AZURE_AI_API_KEY")
-#         api_version = "2024-12-01-preview"
- 
-#         if not subscription_key:
-#             return "Error: AZURE_OPENAI_KEY not found in environment variables"
- 
-#         client = AzureOpenAI(
-#             api_version=api_version,
-#             azure_endpoint=endpoint,
-#             api_key=subscription_key,
-#         )
- 
-#         response = client.chat.completions.create(
-#             messages=[
-#                 {
-#                     "role": "system",
-#                     "content": "You are a helpful assistant.",
-#                 },
-#                 {
-#                     "role": "user",
-#                     "content": text,
-#                 }
-#             ],
-#             max_tokens=1000,
-#             temperature=0.7,
-#             model=deployment
-#         )
- 
-#         return response.choices[0].message.content
-#     except Exception as e:
-#         # AI_ERROR_COUNT.labels(model='azure', error_type=type(e).__name__).inc()
-#         return f"Azure Error: {str(e)}"
- 
-
 
 
 def call_gemini_api(df1: pd.DataFrame, df2: pd.DataFrame) -> Dict[str, Any]:
@@ -214,6 +173,38 @@ async def get_dashboard_data():
 def get_rrf():
     rrf = get_rrf_details()
     return {"rrf": rrf}
+
+@app.get("/grade_count")
+def get_grade_count():
+    bench = get_candidates_db()
+    df_bench = pd.DataFrame(bench)
+    grade_count = df_bench['grade'].value_counts().to_dict()
+    return {"grade_count": grade_count}
+    # return grade_count
+
+@app.get("/trends")
+def get_trends():
+    rrf_details = get_rrf_details()
+    df_rrf = pd.DataFrame(rrf_details)
+    # Convert created_on to tz-aware UTC
+    df_rrf['created_on'] = pd.to_datetime(
+        df_rrf['created_on'],
+        errors='coerce',
+        utc=True
+    )
+    # Use tz-aware "now" in UTC
+    now_utc = pd.Timestamp.now(tz='UTC')
+    # Calculate ageing in days
+    df_rrf['ageing'] = (now_utc - df_rrf['created_on']).dt.days
+    df_rrf_dict = df_rrf.to_dict(orient='records')
+    return {"trends": df_rrf_dict}
+
+
+@app.get("/get_allocated_candidates")
+def get_allocated_candidates():
+    allocated_candidates = get_allocated_candidates_db()
+    return {"allocated_candidates": allocated_candidates}
+
 
 @app.get("/get_all_details")
 def get_all_details():
